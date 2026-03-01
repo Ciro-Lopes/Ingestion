@@ -1,0 +1,76 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ingestion-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ingestion-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: ingestion-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ingestion-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ingestion-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ingestion
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/Ingestion.Infrastructure/Persistence/Scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ingestion-network
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: src/Ingestion.Worker/Dockerfile
+    container_name: ingestion-worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+    env_file:
+      - .env.example
+    networks:
+      - ingestion-network
+
+volumes:
+  postgres_data:
+
+networks:
+  ingestion-network:
+    driver: bridge

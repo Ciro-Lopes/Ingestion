@@ -1,0 +1,33 @@
+# Override file for local development.
+# This file is automatically merged with docker-compose.yml when running:
+#   docker-compose up
+# Do NOT commit secrets or real credentials here.
+
+services:
+  rabbitmq:
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  ingestion:
+    environment:
+      - DOTNET_ENVIRONMENT=Development
+      - RabbitMq__Host=rabbitmq
+      - RabbitMq__Port=5672
+      - RabbitMq__Username=guest
+      - RabbitMq__Password=guest
+      - RabbitMq__VirtualHost=/
+      - Redis__ConnectionString=redis:6379
+      - Database__ConnectionString=Host=postgres;Port=5432;Database=ingestion;Username=postgres;Password=postgres
+    # In local dev, build from source instead of a pre-built image
+    build:
+      context: .
+      dockerfile: src/Ingestion.Worker/Dockerfile
