@@ -1,6 +1,6 @@
 # ingestion
 
-Microsserviço responsável pela **ingestão de dados** no fluxo de distribuição. Consome mensagens de filas RabbitMQ, aplica controle de versionamento via Redis, persiste em lote no PostgreSQL e publica para o próximo microsserviço do pipeline.
+Microsserviço responsável pela **ingestão de dados** e notificação. Consome mensagens de filas RabbitMQ, aplica controle de versionamento via Redis, persiste em lote no PostgreSQL e publica para o próximo microsserviço do pipeline.
 
 ---
 
