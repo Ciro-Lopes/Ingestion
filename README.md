@@ -1,12 +1,13 @@
+
 # ingestion
 
-Microsserviço responsável pela **ingestão de dados** e notificação. Consome mensagens de filas RabbitMQ, aplica controle de versionamento via Redis, persiste em lote no PostgreSQL e publica para o próximo microsserviço do pipeline.
+Microservice responsible for **data ingestion** and notification. It consumes messages from RabbitMQ queues, applies version control via Redis, persists in batch to PostgreSQL, and publishes to the next microservice in the pipeline.
 
 ---
 
-## Arquitetura
+## Architecture
 
-O projeto segue a **Arquitetura Hexagonal (Ports & Adapters)**, isolando completamente o domínio e as regras de negócio de qualquer detalhe de infraestrutura.
+The project follows the **Hexagonal Architecture (Ports & Adapters)**, completely isolating the domain and business rules from any infrastructure details.
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -20,120 +21,120 @@ O projeto segue a **Arquitetura Hexagonal (Ports & Adapters)**, isolando complet
 │  Redis Cache                                │
 │  PostgreSQL (Dapper)                        │
 └──────────────┬──────────────────────────────┘
-               │ implementa
+               │ implements
 ┌──────────────▼──────────────────────────────┐
-│     PORTS (Interfaces do Domínio)           │
+│     PORTS (Domain Interfaces)               │
 │  ICacheService, ITradeRepository,           │
 │  IMessagePublisher                          │
 └──────────────┬──────────────────────────────┘
-               │ usa
+               │ uses
 ┌──────────────▼──────────────────────────────┐
 │       APPLICATION (Use Cases)               │
 │  ProcessTradeUseCase                        │
 └──────────────┬──────────────────────────────┘
-               │ usa
+               │ uses
 ┌──────────────▼──────────────────────────────┐
 │           DOMAIN                            │
 │  Entities · Value Objects · Ports           │
 └─────────────────────────────────────────────┘
 ```
 
-### Estrutura de Projetos
+### Project Structure
 
-| Projeto | Tipo | Responsabilidade |
+| Project | Type | Responsibility |
 |---|---|---|
-| `Ingestion.Domain` | classlib | Entidades, Value Objects, interfaces de Ports |
-| `Ingestion.Application` | classlib | Use Cases, DTOs, Mappers, lógica de batch |
+| `Ingestion.Domain` | classlib | Entities, Value Objects, Port interfaces |
+| `Ingestion.Application` | classlib | Use Cases, DTOs, Mappers, batch logic |
 | `Ingestion.Infrastructure` | classlib | Adapters: RabbitMQ, Redis, PostgreSQL/Dapper |
 | `Ingestion.Worker` | worker service | Composition root, DI, BackgroundService hosts |
-| `Ingestion.Domain.Tests` | xunit | Testes unitários do domínio |
-| `Ingestion.Application.Tests` | xunit | Testes unitários dos use cases e mappers |
-| `Ingestion.Infrastructure.Tests` | xunit | Testes de integração dos adapters |
+| `Ingestion.Domain.Tests` | xunit | Domain unit tests |
+| `Ingestion.Application.Tests` | xunit | Use case and mapper unit tests |
+| `Ingestion.Infrastructure.Tests` | xunit | Adapter integration tests |
 
 ---
 
-## Fluxos
+## Flows
 
-| Fluxo | Fila de consumo | DLQ | Tabela |
+| Flow | Consumption Queue | DLQ | Table |
 |---|---|---|---|
 | `trade` | `ingestion.trade` | `ingestion.trade.dead-letter` | `trades` |
 
-### Fluxo de Processamento
+### Processing Flow
 
 ```
 [RabbitMQ Queue]
       │
       ▼
-[BaseConsumer] — deserializa mensagem
+[BaseConsumer] — deserializes message
       │
       ▼
 [ProcessXxxUseCase]
-  ├─ Verifica versão no Redis (UpdatedAt)
-  │     └─ se dado desatualizado → ACK sem persistência
-  ├─ Mapeia para entidade de domínio
-  ├─ Acumula no BatchProcessor<T>
+  ├─ Checks version in Redis (UpdatedAt)
+  │     └─ if data is outdated → ACK without persistence
+  ├─ Maps to domain entity
+  ├─ Accumulates in BatchProcessor<T>
   │
   ▼
-[Batch flush — por tamanho OU por timer]
-  ├─ UpsertBatch no PostgreSQL
-  ├─ Atualiza Redis (versioning)
-  └─ Publica no próximo microsserviço (RabbitMQ)
+[Batch flush — by size OR by timer]
+  ├─ UpsertBatch in PostgreSQL
+  ├─ Updates Redis (versioning)
+  └─ Publishes to the next microservice (RabbitMQ)
 ```
 
 ---
 
-## Tecnologias
+## Technologies
 
 - **.NET 8** — Worker Service
-- **RabbitMQ** — mensageria (consumo e publicação)
-- **Redis** — cache distribuído (versioning + config dinâmica de consumo)
-- **PostgreSQL** — persistência
-- **Dapper** — acesso ao banco (sem ORM)
-- **Docker / Docker Compose** — ambiente local
+- **RabbitMQ** — messaging (consume and publish)
+- **Redis** — distributed cache (versioning + dynamic consumption config)
+- **PostgreSQL** — persistence
+- **Dapper** — database access (no ORM)
+- **Docker / Docker Compose** — local environment
 
 ---
 
-## Pré-requisitos
+## Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 ---
 
-## Como Rodar
+## How to Run
 
-### 1. Subir a infraestrutura local
+### 1. Start the local infrastructure
 
 ```bash
 docker-compose up -d rabbitmq redis postgres
 ```
 
-Aguarde os healthchecks ficarem `healthy`:
+Wait for the healthchecks to become `healthy`:
 
 ```bash
 docker-compose ps
 ```
 
-### 2. Configurar variáveis de ambiente
+### 2. Configure environment variables
 
 ```bash
 cp .env.example .env
-# edite o .env conforme necessário para ambiente local
+# edit the .env as needed for your local environment
 ```
 
-### 3. Rodar o Worker localmente
+### 3. Run the Worker locally
 
 ```bash
 dotnet run --project src/Ingestion.Worker/Ingestion.Worker.csproj
 ```
 
-Ou via Docker Compose (build + run):
+Or via Docker Compose (build + run):
 
 ```bash
 docker-compose up --build ingestion
 ```
 
-### 4. Rodar os testes
+### 4. Run the tests
 
 ```bash
 dotnet test
@@ -141,24 +142,24 @@ dotnet test
 
 ---
 
-## Portas Locais
+## Local Ports
 
-| Serviço | Porta |
+| Service | Port |
 |---|---|
 | RabbitMQ AMQP | 5672 |
 | RabbitMQ Management UI | 15672 |
 | Redis | 6379 |
 | PostgreSQL | 5432 |
 
-**RabbitMQ Management:** http://localhost:15672 (usuário: `guest` / senha: `guest`)
+**RabbitMQ Management:** http://localhost:15672 (user: `guest` / password: `guest`)
 
 ---
 
-## Configuração Dinâmica via Redis
+## Dynamic Configuration via Redis
 
-O microsserviço consulta periodicamente o Redis para ajustar o comportamento de consumo **sem necessidade de redeploy**:
+The microservice periodically queries Redis to adjust consumption behavior **without the need for redeploy**:
 
-| Chave Redis | Descrição |
+| Redis Key | Description |
 |---|---|
-| `ingestion:config:{queueName}` | JSON com `batchSize`, `parallelConsumers`, `isEnabled` |
-| `ingestion:trade:{compositeId}:updated_at` | Controle de versioning por registro |
+| `ingestion:config:{queueName}` | JSON with `batchSize`, `parallelConsumers`, `isEnabled` |
+| `ingestion:trade:{compositeId}:updated_at` | Versioning control per record |
